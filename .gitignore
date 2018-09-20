@@ -11,7 +11,6 @@
 venv
 my_env/
 cv/
-data/
 
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm
 
@@ -44,8 +43,6 @@ user.properties
 ChainerMachineTranslation*
 Py-StackExchange
 jawiki-latest-all-titles-in-ns0*
-data
-data/*
 data_bk
 data_bk/*
 word2vec.model*
@@ -64,8 +61,6 @@ cron/*
 ChainerDialogue*
 model_word_match/
 model_word_match/*
-Data/*
-Data
 data_word_match
 data_word_match/*
 #Mecab
@@ -79,3 +74,5 @@ mecab-ipadic-2.7.0-20070801/*
 data_latest
 *.json
 *.gz
+Data/jawiki-latest-random-titles-in-ns0
+Data/projectnextnlp-chat-dialogue-corpus/

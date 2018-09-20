@@ -18,5 +18,5 @@ GET_NUMBER=5000
 
 # -- Body ---------------------------------------------------------
 
-cat $WIKI_VECTOR | perl -MList::Util=shuffle -e 'print shuffle(<STDIN>);' | head -n $GET_NUMBER
-jot -r "$(wc -l $WIKI_DATA)" 1 | paste - $1 | sort -n | cut -f 2- | head -n GET_NUMBER
+cat $WIKI_DATA | perl -MList::Util=shuffle -e 'print shuffle(<STDIN>);' | head -n $GET_NUMBER
+jot -r "$(wc -l $WIKI_DATA)" 1 | paste - $1 | sort -n | cut -f 2- | head -n $GET_NUMBER
