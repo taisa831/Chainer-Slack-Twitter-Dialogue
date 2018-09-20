@@ -1,135 +1,54 @@
 import numpy as np
-from chainer import functions
-# cpu計算とgpu計算で使い分けるラッパー
-from util.chainer_cpu_wrapper import wrapper
+from chainer import Chain, Variable, cuda, functions, links, optimizer, optimizers, serializers
 from EncoderDecoderModel import EncoderDecoderModel
+from word2vec.word2vec_load import SkipGram,SoftmaxCrossEntropyLoss
 
-
-class EncoderDecoderModelParameter():
-
-    def __init__(self, is_training, src_batch, encoderDecoderModel, trg_batch=None, generation_limit=None):
-        self.model = encoderDecoderModel.model
-        self.tanh = functions.tanh
-        self.lstm = functions.lstm
-        self.batch_size = len(src_batch)
-        self.src_len = len(src_batch[0])
-        # 翻訳元言語を単語からインデックスにしている（ニューラルネットの空間で扱うため）
-        self.src_stoi = encoderDecoderModel.src_vocab.stoi
-        # 翻訳先言語を単語からインデックスにしている（ニューラルネットの空間で扱うため）
-        self.trg_stoi = encoderDecoderModel.trg_vocab.stoi
-        # 翻訳先言語をインデックスから単語にしている(翻訳結果として保持するため、翻訳先言語だけ用意している)
-        self.trg_itos = encoderDecoderModel.trg_vocab.itos
-        # lstmのために状態を初期化
-        self.state_c = wrapper.zeros((self.batch_size, encoderDecoderModel.n_hidden))
-        self.trg_batch = trg_batch
-        self.generation_limit = generation_limit
-
-
-class EncoderDecoderModelEncoding():
-
-    def encoding(self, src_batch, parameter, trg_batch=None, generation_limit=None):
-        # encoding
-        # 翻訳元言語の末尾</s>を潜在空間に射像し、隠れ層に入力、lstmで出力までをバッチサイズ分行う
-        # 予め末尾の設定をしていないと終了単語が分からないため
-        # 1:翻訳元言語の入力x:図のx部分に相当
-        state_x = wrapper.make_var([parameter.src_stoi('</s>') for _ in range(parameter.batch_size)], dtype=np.int32)
-        # 2:翻訳元言語の入力xを潜在空間に射像する。（次元数を圧縮するため）:図のi部分に相当
-        state_i = parameter.tanh(parameter.model.weight_xi(state_x))
-        # 3:潜在空間iの入力をlstmに入力し、次の単語予測に使用する:図のp部分に相当
-        parameter.state_c, state_p = parameter.lstm(parameter.state_c, parameter.model.weight_ip(state_i))
-
-        # 翻訳元言語を逆順に上記と同様の処理を行う
-        for l in reversed(range(parameter.src_len)):
-            # 翻訳元言語を語彙空間に写像
-            state_x = wrapper.make_var([parameter.src_stoi(src_batch[k][l]) for k in range(parameter.batch_size)],
-                                       dtype=np.int32)
-            # 語彙空間を潜在空間（次元数が減る）に射像
-            state_i = parameter.tanh(parameter.model.weight_xi(state_x))
-            # 状態と出力結果をlstmにより出力。lstmの入力には前の状態と語彙空間の重み付き出力と前回の重み付き出力を入力としている
-            parameter.state_c, state_p = parameter.lstm(parameter.state_c, parameter.model.weight_ip(state_i)
-                                                        + parameter.model.weight_pp(state_p))
-
-        # 次のミニバッチ処理のために最終結果をlstmで出力。翻訳の仮説用のリストを保持
-        parameter.state_c, state_q = parameter.lstm(parameter.state_c, parameter.model.weight_pq(state_p))
-        hyp_batch = [[] for _ in range(parameter.batch_size)]
-        return state_q, hyp_batch
-
-
-class EncoderDecoderModelDecoding():
-
-    def decoding(self, is_training, src_batch, parameter, state_q, hyp_batch, trg_batch=None, generation_limit=None):
-
-        # decoding
-        """
-　　     学習
-        """
-        if is_training:
-            # 損失の初期化及び答えとなる翻訳先言語の長さを取得。（翻訳元言語と翻訳先言語で長さが異なるため）
-            # 損失が最小となるように学習するため必要
-            accum_loss = wrapper.zeros(())
-            trg_len = len(parameter.trg_batch[0])
-
-            # ニューラルネットの処理は基本的にEncodingと同一であるが、損失計算と翻訳仮説候補の確保の処理が加わっている
-            for l in range(trg_len):
-                # 1:翻訳元言語に対するニューラルの出力qを受け取り、潜在空間jに射像
-                state_j = parameter.tanh(parameter.model.weight_qj(state_q))
-                # 2:潜在空間jから翻訳先言語yの空間に射像
-                result_y = parameter.model.weight_jy(state_j)
-                # 3:答えとなる翻訳結果を取得
-                state_target = wrapper.make_var([parameter.trg_stoi(parameter.trg_batch[k][l])
-                                                 for k in range(parameter.batch_size)], dtype=np.int32)
-                # 答えと翻訳結果により損失を計算
-                accum_loss += functions.softmax_cross_entropy(result_y, state_target)
-                # 複数翻訳候補が出力されるため、出力にはもっとも大きな値を選択
-                output = wrapper.get_data(result_y).argmax(1)
-
-                # 翻訳仮説確保(インデックスから翻訳単語に直す処理も行っている）
-                for k in range(parameter.batch_size):
-                    hyp_batch[k].append(parameter.trg_itos(output[k]))
-
-                # 状態と出力結果をlstmにより出力。lstmの入力には前の状態と語彙空間の重み付き出力と前回の重み付き出力を入力としている
-                parameter.state_c, state_q = parameter.lstm(parameter.state_c, parameter.model.weight_yq(state_target)
-                                                            + parameter.model.weight_qq(state_q))
-            return hyp_batch, accum_loss
-        else:
-            """
-            予測部分
-            """
-            # 末尾に</s>が予測できないと無限に翻訳してしまうため、予測では予測する翻訳言語の長さに制約をしている
-            while len(hyp_batch[0]) < parameter.generation_limit:
-                state_j = parameter.tanh(parameter.model.weight_qj(state_q))
-                result_y = parameter.model.weight_jy(state_j)
-                # 複数翻訳候補が出力されるため、出力にはもっとも大きな値を選択
-                output = wrapper.get_data(result_y).argmax(1)
-
-                # 翻訳仮説確保(インデックスから翻訳単語に直す処理も行っている）
-                for k in range(parameter.batch_size):
-                    hyp_batch[k].append(parameter.trg_itos(output[k]))
-
-                # ミニバッチサイズ分の翻訳仮説の末尾が</s>になったときにDecoding処理が終わるようになっている。
-                if all(hyp_batch[k][-1] == '</s>' for k in range(parameter.batch_size)): break
-
-                # 翻訳仮説をニューラルネットで扱える空間に射像している
-                state_y = wrapper.make_var(output, dtype=np.int32)
-                # 次のlstmの処理のために出力結果と状態を渡している
-                parameter.state_c, state_q = parameter.lstm(parameter.state_c, parameter.model.weight_yq(state_y)
-                                                            + parameter.model.weight_qq(state_q))
-
-            return hyp_batch
+unit = 300
+vocab = 9982
+loss_func = SoftmaxCrossEntropyLoss(unit, vocab)
+w2v_model = SkipGram(vocab, unit, loss_func)
+serializers.load_hdf5("word2vec/word2vec_chainer.model", w2v_model)
 
 
 class EncoderDecoderModelForward(EncoderDecoderModel):
 
-    def forward(self, is_training, src_batch, trg_batch=None, generation_limit=None):
-        # パラメータ設定
-        parameter = EncoderDecoderModelParameter(is_training, src_batch, self, trg_batch, generation_limit)
+    def forward(self, src_batch, trg_batch, src_vocab, trg_vocab, encdec, is_training, generation_limit):
+        batch_size = len(src_batch)
+        src_len = len(src_batch[0])
+        trg_len = len(trg_batch[0]) if trg_batch else 0
+        src_stoi = src_vocab.stoi
+        trg_stoi = trg_vocab.stoi
+        trg_itos = trg_vocab.itos
+        encdec.reset(batch_size)
 
-        # encoding
-        encoder = EncoderDecoderModelEncoding()
-        s_q, hyp_batch = encoder.encoding(src_batch, parameter)
-        # decoding
-        decoder = EncoderDecoderModelDecoding()
+        x = self.common_function.my_array([src_stoi('</s>') for _ in range(batch_size)], np.int32)
+        encdec.encode(x)
+        for l in reversed(range(src_len)):
+            x = self.common_function.my_array([src_stoi(src_batch[k][l]) for k in range(batch_size)], np.int32)
+            encdec.encode(x)
+
+        t = self.common_function.my_array([trg_stoi('<s>') for _ in range(batch_size)], np.int32)
+        hyp_batch = [[] for _ in range(batch_size)]
+
         if is_training:
-            return decoder.decoding(is_training, src_batch, parameter, s_q, hyp_batch, trg_batch, generation_limit)
+            loss = self.common_function.my_zeros((), np.float32)
+            for l in range(trg_len):
+                y = encdec.decode(t)
+                t = self.common_function.my_array([trg_stoi(trg_batch[k][l]) for k in range(batch_size)], np.int32)
+                loss += functions.softmax_cross_entropy(y, t)
+                output = cuda.to_cpu(y.data.argmax(1))
+                for k in range(batch_size):
+                    hyp_batch[k].append(trg_itos(output[k]))
+            return hyp_batch, loss
+
         else:
-            return decoder.decoding(is_training, src_batch, parameter, s_q, hyp_batch, trg_batch, generation_limit)
+            while len(hyp_batch[0]) < generation_limit:
+                y = encdec.decode(t)
+                output = cuda.to_cpu(y.data.argmax(1))
+                t = self.common_function.my_array(output, np.int32)
+                for k in range(batch_size):
+                    hyp_batch[k].append(trg_itos(output[k]))
+                if all(hyp_batch[k][-1] == '</s>' for k in range(batch_size)):
+                    break
+
+        return hyp_batch

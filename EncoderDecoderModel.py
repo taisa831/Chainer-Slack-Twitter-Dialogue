@@ -1,6 +1,6 @@
-#'!/usr/bin/env python
-#-*- coding:utf-8 -*-
-#!/usr/bin/python3
+# '!/usr/bin/env python
+# -*- coding:utf-8 -*-
+# !/usr/bin/python3
 
 import numpy as np
 
@@ -18,22 +18,22 @@ import random
 class EncoderDecoderModel:
 
     def __init__(self, parameter_dict):
-        self.parameter_dict       = parameter_dict
-        self.source               = parameter_dict["source"]
-        self.target               = parameter_dict["target"]
-        self.test_source          = parameter_dict["test_source"]
-        self.test_target          = parameter_dict["test_target"]
-        self.vocab                = parameter_dict["vocab"]
-        self.embed                = parameter_dict["embed"]
-        self.hidden               = parameter_dict["hidden"]
-        self.epoch                = parameter_dict["epoch"]
-        self.minibatch            = parameter_dict["minibatch"]
-        self.generation_limit     = parameter_dict["generation_limit"]
-        self.word2vec             = parameter_dict["word2vec"]
-        self.word2vecFlag         = parameter_dict["word2vecFlag"]
+        self.parameter_dict = parameter_dict
+        self.source = parameter_dict["source"]
+        self.target = parameter_dict["target"]
+        self.test_source = parameter_dict["test_source"]
+        self.test_target = parameter_dict["test_target"]
+        self.vocab = parameter_dict["vocab"]
+        self.embed = parameter_dict["embed"]
+        self.hidden = parameter_dict["hidden"]
+        self.epoch = parameter_dict["epoch"]
+        self.minibatch = parameter_dict["minibatch"]
+        self.generation_limit = parameter_dict["generation_limit"]
+        self.word2vec = parameter_dict["word2vec"]
+        self.word2vecFlag = parameter_dict["word2vecFlag"]
         self.common_function = CommonFunction()
         self.model = "ChainerDialogue"
-        self.encdec               = parameter_dict["encdec"]
+        self.encdec = parameter_dict["encdec"]
 
     def forward(self, src_batch, trg_batch, src_vocab, trg_vocab, encdec, is_training, generation_limit):
         pass
@@ -80,7 +80,6 @@ class EncoderDecoderModel:
 
         return hyp_batch
 
-
     def train(self):
         trace('making vocabularies ...')
         src_vocab = Vocabulary.new(gens.word_list(self.source), self.vocab)
@@ -98,7 +97,7 @@ class EncoderDecoderModel:
             gen1 = gens.word_list(self.source)
             gen2 = gens.word_list(self.target)
             gen3 = gens.batch(gens.sorted_parallel(gen1, gen2, 100 * self.minibatch), self.minibatch)
-            opt = optimizers.AdaGrad(lr = 0.01)
+            opt = optimizers.AdaGrad(lr=0.01)
             opt.setup(encdec)
             opt.add_hook(optimizer.GradientClipping(5))
 
@@ -144,14 +143,15 @@ class EncoderDecoderModel:
                 trace('sample %8d - %8d ...' % (generated + 1, generated + K))
                 # If you use the ipython note book you hace to use the forward function
                 # hyp_batch = self.forward(src_batch, None, src_vocab, trg_vocab, encdec, False, self.generation_limit)
-                hyp_batch = self.forward_implement(src_batch, None, src_vocab, trg_vocab, encdec, False, self.generation_limit)
+                hyp_batch = self.forward_implement(src_batch, None, src_vocab, trg_vocab, encdec, False,
+                                                   self.generation_limit)
 
                 source_cuont = 0
                 for hyp in hyp_batch:
                     hyp.append('</s>')
                     hyp = hyp[:hyp.index('</s>')]
                     print("src : " + "".join(src_batch[source_cuont]).replace("</s>", ""))
-                    print('hyp : ' +''.join(hyp))
+                    print('hyp : ' + ''.join(hyp))
                     print(' '.join(hyp), file=fp)
                     source_cuont = source_cuont + 1
 
