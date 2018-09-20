@@ -7,13 +7,13 @@ from util.chainer_cpu_wrapper import wrapper
 parameter_dict = {}
 train_path = "util/"
 test_path = "util/"
-parameter_dict["source"] = train_path + "player_1.txt"
-parameter_dict["target"] = train_path + "player_2.txt"
-parameter_dict["test_source"] = train_path + "player_1.txt"
-parameter_dict["test_target"] = train_path + "player_2.txt"
-parameter_dict["reference_target"] = train_path + "player_2.txt"
+parameter_dict["source"] = train_path + "player_1_wakati.txt"
+parameter_dict["target"] = train_path + "player_2_wakati.txt"
+parameter_dict["test_source"] = train_path + "player_1_wakati.txt"
+parameter_dict["test_target"] = train_path + "player_2_wakati.txt"
+parameter_dict["reference_target"] = train_path + "player_2_wakati.txt"
 parameter_dict["word2vecFlag"] = False
-parameter_dict["word2vec"] = "word2vec/word2vec_chainer.model"
+parameter_dict["word2vec"] = "word2vec/word2vec.model"
 parameter_dict["encdec"] = EncoderDecoder
 
 """
@@ -51,7 +51,6 @@ parameter_dict["minibatch"] = 64
 """
 parameter_dict["generation_limit"] = 256
 
-#--------Hands on  2----------------------------------------------------------------#
 
 trace('initializing ...')
 wrapper.init()

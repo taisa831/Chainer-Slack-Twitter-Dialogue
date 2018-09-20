@@ -1,13 +1,7 @@
-# 表示用に使用しています。
-import EncoderDecoder
-from util.functions import trace
 import numpy as np
-
-from chainer import functions, optimizers
-
+from chainer import functions
 # cpu計算とgpu計算で使い分けるラッパー
 from util.chainer_cpu_wrapper import wrapper
-
 from EncoderDecoderModel import EncoderDecoderModel
 
 
@@ -34,7 +28,6 @@ class EncoderDecoderModelParameter():
 class EncoderDecoderModelEncoding():
 
     def encoding(self, src_batch, parameter, trg_batch=None, generation_limit=None):
-        # --------Hands on------------------------------------------------------------------#
         # encoding
         # 翻訳元言語の末尾</s>を潜在空間に射像し、隠れ層に入力、lstmで出力までをバッチサイズ分行う
         # 予め末尾の設定をしていないと終了単語が分からないため
@@ -62,13 +55,10 @@ class EncoderDecoderModelEncoding():
         return state_q, hyp_batch
 
 
-# --------Hands on------------------------------------------------------------------#
-
 class EncoderDecoderModelDecoding():
 
     def decoding(self, is_training, src_batch, parameter, state_q, hyp_batch, trg_batch=None, generation_limit=None):
 
-        # --------Hands on------------------------------------------------------------------#
         # decoding
         """
 　　     学習
@@ -99,7 +89,7 @@ class EncoderDecoderModelDecoding():
 
                 # 状態と出力結果をlstmにより出力。lstmの入力には前の状態と語彙空間の重み付き出力と前回の重み付き出力を入力としている
                 parameter.state_c, state_q = parameter.lstm(parameter.state_c, parameter.model.weight_yq(state_target)
-                                                             + parameter.model.weight_qq(state_q))
+                                                            + parameter.model.weight_qq(state_q))
             return hyp_batch, accum_loss
         else:
             """
@@ -123,11 +113,10 @@ class EncoderDecoderModelDecoding():
                 state_y = wrapper.make_var(output, dtype=np.int32)
                 # 次のlstmの処理のために出力結果と状態を渡している
                 parameter.state_c, state_q = parameter.lstm(parameter.state_c, parameter.model.weight_yq(state_y)
-                                                             + parameter.model.weight_qq(state_q))
+                                                            + parameter.model.weight_qq(state_q))
 
             return hyp_batch
 
-# --------Hands on------------------------------------------------------------------#
 
 class EncoderDecoderModelForward(EncoderDecoderModel):
 
@@ -144,59 +133,3 @@ class EncoderDecoderModelForward(EncoderDecoderModel):
             return decoder.decoding(is_training, src_batch, parameter, s_q, hyp_batch, trg_batch, generation_limit)
         else:
             return decoder.decoding(is_training, src_batch, parameter, s_q, hyp_batch, trg_batch, generation_limit)
-
-
-parameter_dict = {}
-train_path = "util/"
-test_path = "util/"
-parameter_dict["source"] = train_path + "player_1.txt"
-parameter_dict["target"] = train_path + "player_2.txt"
-parameter_dict["test_source"] = test_path + "test1000.ja"
-parameter_dict["test_target"] = test_path + "test1000_hyp.en"
-parameter_dict["reference_target"] = test_path + "test1000.en"
-parameter_dict["word2vec"] = "word2vec/word2vec_chainer.model"
-parameter_dict["word2vecFlag"] = False
-parameter_dict["encdec"] = EncoderDecoder
-#--------Hands on  2----------------------------------------------------------------
-
-"""
-下記の値が大きいほど扱える語彙の数が増えて表現力が上がるが計算量が爆発的に増えるので大きくしない方が良いです。
-"""
-parameter_dict["vocab"] = 550
-
-"""
-この数が多くなればなるほどモデルが複雑になります。この数を多くすると必然的に学習回数を多くしないと学習は
-収束しません。
-語彙数よりユニット数の数が多いと潜在空間への写像が出来ていないことになり結果的に意味がない処理になります。
-"""
-parameter_dict["embed"] = 500
-
-"""
-この数も多くなればなるほどモデルが複雑になります。この数を多くすると必然的に学習回数を多くしないと学習は
-収束しません。
-"""
-parameter_dict["hidden"] = 20
-
-"""
-学習回数。基本的に大きい方が良いが大きすぎると収束しないです。
-"""
-parameter_dict["epoch"] = 20
-
-"""
-ミニバッチ学習で扱うサイズです。この点は経験的に調整する場合が多いが、基本的に大きくすると学習精度が向上する
-代わりに学習スピードが落ち、小さくすると学習精度が低下する代わりに学習スピードが早くなります。
-"""
-parameter_dict["minibatch"] = 64
-
-"""
-予測の際に必要な単語数の設定。長いほど多くの単語の翻訳が確認できるが、一般的にニューラル翻訳は長い翻訳には
-向いていないので小さい数値がオススメです。
-"""
-parameter_dict["generation_limit"] = 256
-
-
-trace('initializing ...')
-wrapper.init()
-
-encoderDecoderModel = EncoderDecoderModelForward(parameter_dict)
-encoderDecoderModel.train()
